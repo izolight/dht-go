@@ -6,14 +6,23 @@ import (
 	"gitea.izolight.xyz/gabor/dht-go/dht"
 	"gitea.izolight.xyz/gabor/dht-go/util"
 	"github.com/marksamman/bencode"
+	"github.com/op/go-logging"
 	"net"
+	"os"
+	"time"
+)
+
+var log = logging.MustGetLogger("dht")
+var format = logging.MustStringFormatter(
+	`%{color}%{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`,
 )
 
 type DHTResponse map[string]interface{}
 
-type NodeInfo struct {
-	id   string
-	addr *net.UDPAddr
+type Node struct {
+	id         string
+	addr       *net.UDPAddr
+	lastActive time.Time
 }
 
 func (d DHTResponse) String() string {
@@ -22,45 +31,65 @@ func (d DHTResponse) String() string {
 	r := d["r"].(map[string]interface{})
 	id := r["id"].(string)
 	n := r["nodes"].(string)
-	nodes := []NodeInfo{}
+	nodes := []string{}
 	for i := 0; i < len(n); {
 		id := n[i : i+20]
 		addr, _ := util.ParseIP(n[i+20 : i+26])
-		node := NodeInfo{id, addr}
-		fmt.Printf("%s %x\n", addr, id)
+		node := fmt.Sprintf("%s %x\n", addr, id)
 		i = i + 26
 		nodes = append(nodes, node)
 	}
 
-	//return fmt.Sprintf("Receiving: TX: %x ID: %x\nNodes: %v", tx, id, nodes)
-	return fmt.Sprintf("Receiving: %s TX: %x ID: %x\n", nodeAddr, tx, id)
+	return fmt.Sprintf("Receiving: %s TX: %x ID: %x\nNodes: %s", nodeAddr, tx, id, nodes)
+}
+
+func initialize() (Node, []byte) {
+	serverAddr, err := net.ResolveUDPAddr("udp", ":12343")
+	util.CheckError(err)
+	id := util.RandomString(20)
+	log.Debug(fmt.Sprintf("Initialized with on %v with ID %x", serverAddr, id))
+
+	return Node{id, serverAddr, time.Now()}, make([]byte, 65536)
+}
+
+func bootstrap() []Node {
+	n1, _ := net.ResolveUDPAddr("udp", "router.bittorrent.com:6881")
+	n2, _ := net.ResolveUDPAddr("udp", "dht.transmissionbt.com:6881")
+	nodes := []Node{}
+	nodes = append(nodes,
+		Node{addr: n1, lastActive: time.Now()},
+		Node{addr: n2, lastActive: time.Now()})
+	return nodes
 }
 
 func main() {
-	ServerAddr, err := net.ResolveUDPAddr("udp", ":12343")
-	util.CheckError(err)
+	backend := logging.NewLogBackend(os.Stderr, "", 0)
+	backendFormatter := logging.NewBackendFormatter(backend, format)
+	logging.SetBackend(backendFormatter)
 
-	id := util.RandomString(20)
+	self, buf := initialize()
 	//secret := randomString(4)
-	buf := make([]byte, 65536)
-	fmt.Printf("Started on: %v with id: %x\n", ServerAddr, id)
+	routingTable := bootstrap()
 
-	bootstrapNode, err := net.ResolveUDPAddr("udp", "router.bittorrent.com:6881")
-	util.CheckError(err)
+	for _, n := range routingTable {
+		c, err := net.DialUDP("udp", self.addr, n.addr)
+		util.CheckError(err)
+		q := dht.FindNodes(self.id)
+		log.Debug(fmt.Sprintf("Querying %v with %s Tx: %x Target: %x",
+			n.addr,
+			q["q"],
+			q["t"],
+			q["a"].(map[string]interface{})["target"]))
+		c.Write(bencode.Encode(q))
 
-	conn, err := net.DialUDP("udp", ServerAddr, bootstrapNode)
-	util.CheckError(err)
-	defer conn.Close()
-	conn.Write(dht.FindNodes(id))
+		n, err := c.Read(buf)
+		util.CheckError(err)
+		payload := bytes.NewReader(buf[0:n])
+		r, err := bencode.Decode(payload)
+		util.CheckError(err)
 
-	n, err := conn.Read(buf)
-	util.CheckError(err)
-	r := bytes.NewReader(buf[0:n])
-
-	t, err := bencode.Decode(r)
-	util.CheckError(err)
-
-	res := DHTResponse(t)
-
-	fmt.Printf("%v\n", res)
+		res := DHTResponse(r)
+		log.Debug(res)
+		c.Close()
+	}
 }

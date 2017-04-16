@@ -6,7 +6,7 @@ import (
 	"github.com/marksamman/bencode"
 )
 
-func FindNodes(id string) []byte {
+func FindNodes(id string) map[string]interface{} {
 	q := make(map[string]interface{})
 	q["y"] = "q"
 	q["q"] = "find_node"
@@ -16,12 +16,10 @@ func FindNodes(id string) []byte {
 	a["target"] = util.RandomString(20)
 	q["a"] = a
 
-	fmt.Printf("Sending: TX: %x\t Target: %x\n", q["t"], a["target"])
-
-	return bencode.Encode(q)
+	return q
 }
 
-func ping(id string) []byte {
+func Ping(id string) []byte {
 	q := make(map[string]interface{})
 	q["y"] = "q"
 	q["q"] = "ping"
@@ -30,10 +28,12 @@ func ping(id string) []byte {
 	a["id"] = id
 	q["a"] = a
 
+	fmt.Printf("%s\n", bencode.Encode(q))
+
 	return bencode.Encode(q)
 }
 
-func getPeers(id string, infoHash string) []byte {
+func GetPeers(id string, infoHash string) []byte {
 	q := make(map[string]interface{})
 	q["y"] = "q"
 	q["q"] = "get_peers"
@@ -46,7 +46,7 @@ func getPeers(id string, infoHash string) []byte {
 	return bencode.Encode(q)
 }
 
-func announcePeer(id string, infoHash string, port uint16, token string) []byte {
+func AnnouncePeer(id string, infoHash string, port uint16, token string) []byte {
 	q := make(map[string]interface{})
 	q["y"] = "q"
 	q["q"] = "announce_peer"
