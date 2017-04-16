@@ -1,11 +1,11 @@
 package util
 
 import (
-	"fmt"
-	"os"
 	"crypto/rand"
-	"net"
 	"encoding/binary"
+	"fmt"
+	"net"
+	"os"
 )
 
 func CheckError(err error) {

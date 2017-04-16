@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"gitea.izolight.xyz/gabor/dht-go/util"
 	"github.com/marksamman/bencode"
 	"net"
-	"gitea.izolight.xyz/gabor/dht-go/util"
 )
 
 type DHTResponse map[string]interface{}
@@ -29,12 +29,6 @@ func findNodesQuery(id string) []byte {
 
 	return bencode.Encode(q)
 }
-
-//func (n NodeAddr) String() string {
-//	ip := net.IPv4(n[0], n[1], n[2], n[3])
-//	port := binary.BigEndian.Uint16([]byte(n[4:]))
-//	return fmt.Sprintf("%v:%d", ip, port)
-//}
 
 func (d DHTResponse) String() string {
 	nodeAddr, _ := util.ParseIP(d["ip"].(string))
@@ -73,14 +67,14 @@ func main() {
 	defer conn.Close()
 	conn.Write(findNodesQuery(id))
 
-		n, err := conn.Read(buf)
-		util.CheckError(err)
-		r := bytes.NewReader(buf[0:n])
+	n, err := conn.Read(buf)
+	util.CheckError(err)
+	r := bytes.NewReader(buf[0:n])
 
-		t, err := bencode.Decode(r)
-		util.CheckError(err)
+	t, err := bencode.Decode(r)
+	util.CheckError(err)
 
-		res := DHTResponse(t)
+	res := DHTResponse(t)
 
-		fmt.Printf("%v\n", res)
+	fmt.Printf("%v\n", res)
 }
