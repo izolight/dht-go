@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"gitea.izolight.xyz/gabor/dht-go/dht"
 	"gitea.izolight.xyz/gabor/dht-go/util"
 	"github.com/marksamman/bencode"
 	"net"
@@ -13,21 +14,6 @@ type DHTResponse map[string]interface{}
 type NodeInfo struct {
 	id   string
 	addr *net.UDPAddr
-}
-
-func findNodesQuery(id string) []byte {
-	q := make(map[string]interface{})
-	q["y"] = "q"
-	q["q"] = "find_node"
-	q["t"] = util.RandomString(2)
-	a := make(map[string]interface{})
-	a["id"] = id
-	a["target"] = util.RandomString(20)
-	q["a"] = a
-
-	fmt.Printf("Sending: TX: %x\t Target: %x\n", q["t"], a["target"])
-
-	return bencode.Encode(q)
 }
 
 func (d DHTResponse) String() string {
@@ -65,7 +51,7 @@ func main() {
 	conn, err := net.DialUDP("udp", ServerAddr, bootstrapNode)
 	util.CheckError(err)
 	defer conn.Close()
-	conn.Write(findNodesQuery(id))
+	conn.Write(dht.FindNodes(id))
 
 	n, err := conn.Read(buf)
 	util.CheckError(err)
