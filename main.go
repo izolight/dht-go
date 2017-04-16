@@ -2,12 +2,10 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/binary"
 	"fmt"
 	"github.com/marksamman/bencode"
 	"net"
-	"os"
+	"gitea.izolight.xyz/gabor/dht-go/util"
 )
 
 type DHTResponse map[string]interface{}
@@ -17,28 +15,14 @@ type NodeInfo struct {
 	addr *net.UDPAddr
 }
 
-func CheckError(err error) {
-	if err != nil {
-		fmt.Println("Error: ", err)
-		os.Exit(0)
-	}
-}
-
-func randomString(size int) string {
-	buf := make([]byte, size)
-	_, err := rand.Read(buf)
-	CheckError(err)
-	return string(buf)
-}
-
 func findNodesQuery(id string) []byte {
 	q := make(map[string]interface{})
 	q["y"] = "q"
 	q["q"] = "find_node"
-	q["t"] = randomString(2)
+	q["t"] = util.RandomString(2)
 	a := make(map[string]interface{})
 	a["id"] = id
-	a["target"] = randomString(20)
+	a["target"] = util.RandomString(20)
 	q["a"] = a
 
 	fmt.Printf("Sending: TX: %x\t Target: %x\n", q["t"], a["target"])
@@ -52,15 +36,8 @@ func findNodesQuery(id string) []byte {
 //	return fmt.Sprintf("%v:%d", ip, port)
 //}
 
-func parseIP(addr string) (*net.UDPAddr, error) {
-	ip := net.IPv4(addr[0], addr[1], addr[2], addr[3])
-	port := binary.BigEndian.Uint16([]byte(addr[4:]))
-
-	return net.ResolveUDPAddr("udp", fmt.Sprintf("%v:%d", ip, port))
-}
-
 func (d DHTResponse) String() string {
-	nodeAddr, _ := parseIP(d["ip"].(string))
+	nodeAddr, _ := util.ParseIP(d["ip"].(string))
 	tx := d["t"].(string)
 	r := d["r"].(map[string]interface{})
 	id := r["id"].(string)
@@ -68,7 +45,7 @@ func (d DHTResponse) String() string {
 	nodes := []NodeInfo{}
 	for i := 0; i < len(n); {
 		id := n[i : i+20]
-		addr, _ := parseIP(n[i+20 : i+26])
+		addr, _ := util.ParseIP(n[i+20 : i+26])
 		node := NodeInfo{id, addr}
 		fmt.Printf("%s %x\n", addr, id)
 		i = i + 26
@@ -81,31 +58,29 @@ func (d DHTResponse) String() string {
 
 func main() {
 	ServerAddr, err := net.ResolveUDPAddr("udp", ":12343")
-	CheckError(err)
+	util.CheckError(err)
 
-	id := randomString(20)
+	id := util.RandomString(20)
 	//secret := randomString(4)
 	buf := make([]byte, 65536)
 	fmt.Printf("Started on: %v with id: %x\n", ServerAddr, id)
 
 	bootstrapNode, err := net.ResolveUDPAddr("udp", "router.bittorrent.com:6881")
-	CheckError(err)
+	util.CheckError(err)
 
 	conn, err := net.DialUDP("udp", ServerAddr, bootstrapNode)
-	CheckError(err)
+	util.CheckError(err)
 	defer conn.Close()
 	conn.Write(findNodesQuery(id))
 
-	for {
 		n, err := conn.Read(buf)
-		CheckError(err)
+		util.CheckError(err)
 		r := bytes.NewReader(buf[0:n])
 
 		t, err := bencode.Decode(r)
-		CheckError(err)
+		util.CheckError(err)
 
 		res := DHTResponse(t)
 
 		fmt.Printf("%v\n", res)
-	}
 }
