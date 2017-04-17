@@ -25,6 +25,13 @@ type Node struct {
 	lastActive time.Time
 }
 
+type Request struct {
+	infoHash []byte
+	addr     *net.UDPAddr
+}
+
+var requests = make(chan Request)
+
 func (d DHTResponse) String() string {
 	nodeAddr, _ := util.ParseIP(d["ip"].(string))
 	tx := d["t"].(string)
