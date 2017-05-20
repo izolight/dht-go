@@ -3,13 +3,14 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"net"
+	"os"
+	"time"
+
 	"gitea.izolight.xyz/gabor/dht-go/dht"
 	"gitea.izolight.xyz/gabor/dht-go/util"
 	"github.com/marksamman/bencode"
 	"github.com/op/go-logging"
-	"net"
-	"os"
-	"time"
 )
 
 var log = logging.MustGetLogger("dht")
@@ -17,7 +18,7 @@ var format = logging.MustStringFormatter(
 	`%{color}%{time:15:04:05.000} %{shortfunc} ▶ %{level:.4s} %{id:03x}%{color:reset} %{message}`,
 )
 
-type DHTResponse map[string]interface{}
+type dhtResponse map[string]interface{}
 
 type Node struct {
 	id         string
@@ -25,14 +26,14 @@ type Node struct {
 	lastActive time.Time
 }
 
-type Request struct {
+type request struct {
 	infoHash []byte
 	addr     *net.UDPAddr
 }
 
-var requests = make(chan Request)
+var requests = make(chan request)
 
-func (d DHTResponse) String() string {
+func (d dhtResponse) String() string {
 	nodeAddr, _ := util.ParseIP(d["ip"].(string))
 	tx := d["t"].(string)
 	r := d["r"].(map[string]interface{})
@@ -50,15 +51,13 @@ func (d DHTResponse) String() string {
 	return fmt.Sprintf("Receiving: %s TX: %x ID: %x\nNodes: %s", nodeAddr, tx, id, nodes)
 }
 
-func (d DHTResponse) Nodes(routingTable chan<- Node) {
+func (d dhtResponse) Nodes(routingTable chan<- Node) {
 	r := d["r"].(map[string]interface{})
 	n := r["nodes"].(string)
 	for i := 0; i < len(n); {
 		id := n[i : i+20]
 		addr, err := util.ParseIP(n[i+20 : i+26])
-		if err != nil {
-			continue
-		}
+		util.CheckError(err)
 		node := Node{id: id, addr: addr, lastActive: time.Now()}
 		routingTable <- node
 		i = i + 26
@@ -108,7 +107,7 @@ func main() {
 		r, err := bencode.Decode(payload)
 		util.CheckError(err)
 
-		res := DHTResponse(r)
+		res := dhtResponse(r)
 		log.Debug(res)
 		res.Nodes(routingTable)
 		c.Close()
